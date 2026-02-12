@@ -82,6 +82,39 @@ async def list_violations(severity: Optional[str] = None, status: Optional[str] 
         cur.close()
         conn.close()
 
+@app.post("/violations/{violation_id}/resolve")
+async def resolve_violation(violation_id: str, status: str = "resolved"):
+    """
+    Mark a violation as resolved or false_positive.
+    """
+    if status not in ["resolved", "false_positive", "ignored"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    conn = scanner.get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE violations 
+            SET status = %s, resolved_at = NOW() 
+            WHERE violation_id = %s
+            RETURNING violation_id
+        """, (status, violation_id))
+        
+        updated_id = cur.fetchone()
+        conn.commit()
+        
+        if not updated_id:
+             raise HTTPException(status_code=404, detail="Violation not found")
+             
+        return {"status": "success", "violation_id": violation_id, "new_status": status}
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error resolving violation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
 @app.post("/scan")
 async def trigger_scan(scan_all: bool = True):
     """

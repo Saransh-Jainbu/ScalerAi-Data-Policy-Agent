@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { CloudUpload, FileText, Trash2, Eye, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { CloudUpload, FileText, Trash2, Eye, CheckCircle2, Clock, AlertCircle, Bot, Sparkles, BrainCircuit } from 'lucide-react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-// API Service URL
-const API_URL = 'http://localhost:8081';
+// API Service URLs
+const DOC_URL = 'http://localhost:8081';
+const RULE_URL = 'http://localhost:8082';
 
 interface Document {
   document_id: string;
@@ -19,12 +21,13 @@ export const Documents: React.FC = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [extracting, setExtracting] = useState<string | null>(null); // document_id being extracted
+  const navigate = useNavigate();
 
   // Fetch Documents
   const fetchDocuments = async () => {
     try {
-      const res = await axios.get(`${API_URL}/documents`);
-      // Sort by newest first
+      const res = await axios.get(`${DOC_URL}/documents`);
       const sorted = res.data.documents.sort((a: any, b: any) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
@@ -38,7 +41,6 @@ export const Documents: React.FC = () => {
 
   useEffect(() => {
     fetchDocuments();
-    // Poll every 5 seconds for updates
     const interval = setInterval(fetchDocuments, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -53,22 +55,40 @@ export const Documents: React.FC = () => {
     formData.append('file', file);
 
     try {
-      await axios.post(`${API_URL}/process`, formData, {
+      await axios.post(`${DOC_URL}/process`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      // Refresh list immediately
       fetchDocuments();
     } catch (err) {
       console.error("Upload failed", err);
       alert("Upload failed. Check console.");
     } finally {
       setUploading(false);
-      // Reset input
       event.target.value = '';
     }
   };
 
-  // Format Bytes to human readable string
+  // Handle AI Extraction Trigger
+  const handleExtract = async (documentId: string) => {
+    setExtracting(documentId);
+    try {
+      // Trigger AI Extraction
+      await axios.post(`${RULE_URL}/extract/${documentId}`);
+
+      // Navigate to Rules page on success to see results
+      // Or show a success toast
+      alert("AI Rules Extracted Successfully! Check the Rules Engine tab.");
+      navigate('/rules');
+
+    } catch (err) {
+      console.error("Extraction failed", err);
+      alert("Failed to extract rules. Make sure the Rule Extractor service is running.");
+    } finally {
+      setExtracting(null);
+    }
+  };
+
+  // Format Bytes
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -103,7 +123,7 @@ export const Documents: React.FC = () => {
         <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
           Drag and drop your PDF compliance documents here, or <span className="text-blue-600 font-semibold underline">browse files</span>
         </p>
-        <p className="mt-4 text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Supported formats: PDF (Max 20MB)</p>
+        <p className="mt-4 text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Supported formats: PDF</p>
       </div>
 
       {/* Document List */}
@@ -146,9 +166,9 @@ export const Documents: React.FC = () => {
                     <td className="px-6 py-4 text-sm text-slate-500">{formatBytes(doc.file_size)}</td>
                     <td className="px-6 py-4">
                       <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${doc.status === 'completed' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' :
-                          doc.status === 'processing' ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' :
-                            doc.status === 'pending' ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' :
-                              'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
+                        doc.status === 'processing' ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' :
+                          doc.status === 'pending' ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' :
+                            'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
                         }`}>
                         {doc.status === 'completed' && <CheckCircle2 className="w-3 h-3" />}
                         {doc.status === 'processing' && <Clock className="w-3 h-3 animate-spin" />}
@@ -158,11 +178,26 @@ export const Documents: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-all">
-                          <Eye className="w-4 h-4" />
+                      {/* Extract Action */}
+                      {doc.status === 'completed' && (
+                        <button
+                          onClick={() => handleExtract(doc.document_id)}
+                          disabled={extracting === doc.document_id}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-wait shadow-sm shadow-blue-500/20 ml-auto"
+                        >
+                          {extracting === doc.document_id ? (
+                            <>
+                              <Bot className="w-3 h-3 animate-bounce" />
+                              Extracting...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3 h-3" />
+                              Extract Rules
+                            </>
+                          )}
                         </button>
-                      </div>
+                      )}
                     </td>
                   </tr>
                 ))

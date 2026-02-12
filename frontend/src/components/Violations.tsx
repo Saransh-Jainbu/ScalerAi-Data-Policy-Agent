@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, XCircle, Search, Filter, AlertTriangle, ShieldAlert } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 // API URL
@@ -9,7 +9,7 @@ const SCANNER_URL = 'http://localhost:8083';
 interface Violation {
   violation_id: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
-  status: 'open' | 'resolved' | 'ignored';
+  status: 'open' | 'resolved' | 'ignored' | 'false_positive';
   evidence: any;
   explanation: string;
   created_at: string;
@@ -21,6 +21,7 @@ export const Violations: React.FC = () => {
   const [violations, setViolations] = useState<Violation[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const fetchViolations = async () => {
     try {
@@ -37,13 +38,28 @@ export const Violations: React.FC = () => {
     setScanning(true);
     try {
       await axios.post(`${SCANNER_URL}/scan`);
-      // Wait a bit for scan to finish (in real app, use websockets or polling)
       setTimeout(fetchViolations, 2000);
     } catch (err) {
       console.error("Scan failed", err);
       alert("Scan failed to start.");
     } finally {
       setScanning(false);
+    }
+  };
+
+  const handleResolve = async (violationId: string, status: 'resolved' | 'ignored') => {
+    setProcessingId(violationId);
+    try {
+      await axios.post(`${SCANNER_URL}/violations/${violationId}/resolve?status=${status}`);
+      // Optimistic update
+      setViolations(prev => prev.map(v =>
+        v.violation_id === violationId ? { ...v, status } : v
+      ));
+    } catch (err) {
+      console.error("Failed to resolve violation", err);
+      alert("Failed to update status.");
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -113,7 +129,7 @@ export const Violations: React.FC = () => {
                 <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500">No violations found! Your system is compliant. 🎉</td></tr>
               ) : (
                 violations.map((v) => (
-                  <tr key={v.violation_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                  <tr key={v.violation_id} className={`transition-colors group ${v.status !== 'open' ? 'opacity-60 bg-slate-50/50 dark:bg-slate-800/20' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30'}`}>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getSeverityColor(v.severity)}`}>
                         <AlertTriangle className="w-3 h-3" />
@@ -136,20 +152,34 @@ export const Violations: React.FC = () => {
                       {new Date(v.created_at).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase ${v.status === 'resolved' ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'
+                      <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase ${v.status === 'resolved' ? 'text-emerald-600 bg-emerald-50 border border-emerald-100' :
+                          v.status === 'ignored' ? 'text-slate-500 bg-slate-100 border border-slate-200' :
+                            'text-red-600 bg-red-50 border border-red-100'
                         }`}>
                         {v.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all" title="Mark Resolved">
-                          <CheckCircle2 className="w-4 h-4" />
-                        </button>
-                        <button className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all" title="Ignore">
-                          <XCircle className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {v.status === 'open' && (
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleResolve(v.violation_id, 'resolved')}
+                            disabled={processingId === v.violation_id}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all disabled:opacity-50"
+                            title="Mark Resolved"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleResolve(v.violation_id, 'ignored')}
+                            disabled={processingId === v.violation_id}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all disabled:opacity-50"
+                            title="Ignore / False Positive"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
