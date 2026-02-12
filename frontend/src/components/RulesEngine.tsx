@@ -80,9 +80,9 @@ export const RulesEngine: React.FC = () => {
 
               <div className="p-5 space-y-4">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Original Policy Text</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 italic leading-relaxed line-clamp-3">
-                    "{rule.source_text_snippet}"
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Description</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {rule.description}
                   </p>
                 </div>
 

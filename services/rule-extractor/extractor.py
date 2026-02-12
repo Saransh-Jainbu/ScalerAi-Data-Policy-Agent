@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RuleExtractor:
-    def __init__(self, model_name: str = "llama3.1:8b"):
+    def __init__(self, model_name: str = "llama3.2:3b"):
         # Load spaCy model for entity extraction
         logger.info("Initializing spaCy...")
         self.nlp = spacy.load("en_core_web_sm")
@@ -50,24 +50,33 @@ class RuleExtractor:
         
         # 2. Construct Prompt for Ollama
         prompt = f"""
-        You are an expert compliance officer. Extract a structured compliance rule from the following policy text.
-
+        You are an expert compliance officer. Extract ALL structured compliance rules from the following policy text.
+        
         Text: "{text}"
         
-        The extracted rule must be actionable in a database.
+        Each extracted rule must be actionable in a database.
         
-        Return ONLY valid JSON in this format:
-        {{
-            "rule_name": "Short descriptive name",
-            "rule_type": "threshold|date_difference|not_null|pattern|role_based",
-            "description": "Clear explanation of the rule",
-            "parameters": {{ ...rule specific logic... }},
-            "confidence_score": 0.0 to 1.0 (float)
-        }}
+        Return ONLY valid JSON as an ARRAY of rules in this format:
+        [
+            {{
+                "rule_name": "Short descriptive name",
+                "rule_type": "threshold|date_difference|not_null|pattern|role_based",
+                "description": "Clear explanation of the rule",
+                "parameters": {{
+                    "table": "table_name",
+                    "column": "column_name",
+                    ...other rule-specific fields...
+                }},
+                "confidence_score": 0.0 to 1.0 (float)
+            }}
+        ]
 
         Extracted Entities (for context): {json.dumps(entities)}
 
-        Constraint: If no clear rule exists, return null.
+        IMPORTANT: 
+        - Return an array even if there's only one rule: [{{...}}]
+        - If no rules exist, return an empty array: []
+        - Always include "table" and "column" in parameters
         """
 
         try:
@@ -82,19 +91,39 @@ class RuleExtractor:
             
             # 4. Parse JSON response
             content = response['message']['content']
+            logger.info(f"AI Response received: {content[:100]}...")
             
-            # Basic cleanup if model adds markdown blocks
-            content = content.replace("```json", "").replace("```", "").strip()
+            # Robust JSON extraction using regex (support both arrays and objects)
+            import re
+            # Try to match array first
+            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+            if not json_match:
+                # Fallback to object
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
             
-            rule_data = json.loads(content)
+            if json_match:
+                content = json_match.group(0)
+            else:
+                # Fallback to cleanup
+                content = content.replace("```json", "").replace("```", "").strip()
             
-            if not rule_data:
-                logger.warning("Model returned empty rule.")
-                return None
+            try:
+                rule_data = json.loads(content)
+            except json.JSONDecodeError as je:
+                logger.error(f"JSON Decode Error: {je}. Raw content: {content}")
+                return []
+            
+            # Normalize to array
+            if isinstance(rule_data, dict):
+                rule_data = [rule_data]
+            elif not isinstance(rule_data, list):
+                logger.warning("Model returned unexpected format.")
+                return []
 
-            # Add metadata
-            rule_data["source_document"] = document_id
-            rule_data["source_text_snippet"] = text[:200]
+            # Add metadata to each rule
+            for rule in rule_data:
+                if rule:
+                    rule["source_document"] = document_id
             
             return rule_data
             

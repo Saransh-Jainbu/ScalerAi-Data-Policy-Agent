@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, XCircle, Search, Filter, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { AlertCircle, CheckCircle2, XCircle, Search, Filter, AlertTriangle, ShieldAlert, ChevronDown, ChevronRight, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -17,11 +17,20 @@ interface Violation {
   rule_type: string;
 }
 
+interface ViolationGroup {
+  rule_name: string;
+  rule_type: string;
+  violations: Violation[];
+  openCount: number;
+  severity: string;
+}
+
 export const Violations: React.FC = () => {
   const [violations, setViolations] = useState<Violation[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const fetchViolations = async () => {
     try {
@@ -51,7 +60,6 @@ export const Violations: React.FC = () => {
     setProcessingId(violationId);
     try {
       await axios.post(`${SCANNER_URL}/violations/${violationId}/resolve?status=${status}`);
-      // Optimistic update
       setViolations(prev => prev.map(v =>
         v.violation_id === violationId ? { ...v, status } : v
       ));
@@ -63,13 +71,53 @@ export const Violations: React.FC = () => {
     }
   };
 
+  const handleBulkResolve = async (ruleName: string, status: 'resolved' | 'ignored') => {
+    const ruleViolations = violations.filter(v => v.rule_name === ruleName && v.status === 'open');
+    for (const v of ruleViolations) {
+      await handleResolve(v.violation_id, status);
+    }
+  };
+
   useEffect(() => {
     fetchViolations();
     const interval = setInterval(fetchViolations, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Helpers
+  // Group violations by rule
+  const groupedViolations: ViolationGroup[] = React.useMemo(() => {
+    const groups = new Map<string, ViolationGroup>();
+
+    violations.forEach(v => {
+      if (!groups.has(v.rule_name)) {
+        groups.set(v.rule_name, {
+          rule_name: v.rule_name,
+          rule_type: v.rule_type,
+          violations: [],
+          openCount: 0,
+          severity: v.severity
+        });
+      }
+      const group = groups.get(v.rule_name)!;
+      group.violations.push(v);
+      if (v.status === 'open') group.openCount++;
+    });
+
+    return Array.from(groups.values()).sort((a, b) => b.openCount - a.openCount);
+  }, [violations]);
+
+  const toggleGroup = (ruleName: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(ruleName)) {
+        next.delete(ruleName);
+      } else {
+        next.add(ruleName);
+      }
+      return next;
+    });
+  };
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'critical': return 'bg-red-50 text-red-600 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900';
@@ -79,25 +127,16 @@ export const Violations: React.FC = () => {
     }
   };
 
+  const totalOpen = violations.filter(v => v.status === 'open').length;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">Compliance Violations</h2>
-          <p className="text-sm text-slate-500">Detected issues across your database infrastructure.</p>
+          <p className="text-sm text-slate-500">{totalOpen} open issues across {groupedViolations.length} rules</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search violations..."
-              className="pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-64 transition-all"
-            />
-          </div>
-          <button className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-500 hover:text-blue-600 transition-colors">
-            <Filter className="w-4 h-4" />
-          </button>
           <button
             onClick={triggerScan}
             disabled={scanning}
@@ -109,85 +148,129 @@ export const Violations: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Severity</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Rule Violation</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Explanation</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Detected At</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {loading ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500">Loading violations...</td></tr>
-              ) : violations.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-500">No violations found! Your system is compliant. 🎉</td></tr>
-              ) : (
-                violations.map((v) => (
-                  <tr key={v.violation_id} className={`transition-colors group ${v.status !== 'open' ? 'opacity-60 bg-slate-50/50 dark:bg-slate-800/20' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30'}`}>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getSeverityColor(v.severity)}`}>
-                        <AlertTriangle className="w-3 h-3" />
-                        {v.severity}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px]">{v.rule_name}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{v.rule_type}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-slate-600 dark:text-slate-400 max-w-[300px] truncate" title={v.explanation}>
-                        {v.explanation}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-400 mt-1 truncate max-w-[300px]">
-                        {JSON.stringify(v.evidence)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      {new Date(v.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase ${v.status === 'resolved' ? 'text-emerald-600 bg-emerald-50 border border-emerald-100' :
-                          v.status === 'ignored' ? 'text-slate-500 bg-slate-100 border border-slate-200' :
-                            'text-red-600 bg-red-50 border border-red-100'
-                        }`}>
-                        {v.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {v.status === 'open' && (
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleResolve(v.violation_id, 'resolved')}
-                            disabled={processingId === v.violation_id}
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all disabled:opacity-50"
-                            title="Mark Resolved"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleResolve(v.violation_id, 'ignored')}
-                            disabled={processingId === v.violation_id}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all disabled:opacity-50"
-                            title="Ignore / False Positive"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {loading ? (
+        <div className="text-center py-12 text-slate-500">Loading violations...</div>
+      ) : groupedViolations.length === 0 ? (
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-8 text-center">
+          <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
+          <h3 className="text-lg font-bold text-emerald-900 dark:text-emerald-100">All Clear!</h3>
+          <p className="text-emerald-700 dark:text-emerald-300 text-sm">No violations found. Your system is compliant. 🎉</p>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-4">
+          {groupedViolations.map((group) => {
+            const isExpanded = expandedGroups.has(group.rule_name);
+            return (
+              <motion.div
+                key={group.rule_name}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden"
+              >
+                {/* Group Header */}
+                <div
+                  onClick={() => toggleGroup(group.rule_name)}
+                  className="p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+                      <Package className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-slate-900 dark:text-white">{group.rule_name}</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">{group.rule_type} • {group.violations.length} total violations</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border ${getSeverityColor(group.severity)}`}>
+                        <AlertTriangle className="w-3 h-3" />
+                        {group.severity}
+                      </span>
+                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-lg">
+                        <span className="text-red-600 dark:text-red-400 font-bold text-sm">{group.openCount}</span>
+                        <span className="text-red-500 dark:text-red-500 text-xs ml-1">open</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded Violations */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="border-t border-slate-200 dark:border-slate-800"
+                    >
+                      <div className="p-4 bg-slate-50 dark:bg-slate-800/30 flex items-center justify-between">
+                        <p className="text-xs text-slate-600 dark:text-slate-400">
+                          Showing {group.violations.length} violation{group.violations.length !== 1 ? 's' : ''}
+                        </p>
+                        {group.openCount > 0 && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleBulkResolve(group.rule_name, 'resolved'); }}
+                              className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all font-medium"
+                            >
+                              Resolve All ({group.openCount})
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleBulkResolve(group.rule_name, 'ignored'); }}
+                              className="text-xs px-3 py-1.5 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-all font-medium"
+                            >
+                              Ignore All
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                        {group.violations.map((v) => (
+                          <div
+                            key={v.violation_id}
+                            className={`p-4 flex items-start justify-between gap-4 transition-colors ${v.status !== 'open' ? 'opacity-50 bg-slate-50/50 dark:bg-slate-800/20' : 'hover:bg-white dark:hover:bg-slate-900'}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-slate-700 dark:text-slate-300">{v.explanation}</p>
+                              <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+                                <span>Detected: {new Date(v.created_at).toLocaleString()}</span>
+                                <span className={`px-2 py-0.5 rounded ${v.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : v.status === 'ignored' ? 'bg-slate-200 text-slate-600' : 'bg-red-100 text-red-700'}`}>
+                                  {v.status}
+                                </span>
+                              </div>
+                            </div>
+                            {v.status === 'open' && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleResolve(v.violation_id, 'resolved')}
+                                  disabled={processingId === v.violation_id}
+                                  className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-50"
+                                  title="Mark Resolved"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleResolve(v.violation_id, 'ignored')}
+                                  disabled={processingId === v.violation_id}
+                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                                  title="Ignore"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

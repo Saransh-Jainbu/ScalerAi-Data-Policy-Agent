@@ -6,6 +6,7 @@ from typing import List, Optional
 from extractor import RuleExtractor
 import psycopg2
 import os
+import json
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -70,28 +71,31 @@ async def extract_rules_from_document(document_id: str):
         logger.info(f"Processing {len(chunks)} chunks for document {document_id}")
 
         for chunk_id, content in chunks:
-            # AI Inference
-            rule = extractor.extract_rule(content, document_id)
+            # AI Inference - now returns an array of rules
+            rules = extractor.extract_rule(content, document_id)
             
-            if rule:
-                # Insert into compliance_rules table
-                cur.execute("""
-                    INSERT INTO compliance_rules (
-                        rule_name, rule_type, description, parameters, 
-                        confidence_score, source_document, status
-                    ) 
-                    VALUES (%s, %s, %s, %s, %s, %s, 'pending')
-                    RETURNING rule_id
-                """, (
-                    rule.get("rule_name", "Unknown Rule"),
-                    rule.get("rule_type", "custom"),
-                    rule.get("description", ""),
-                    json.dumps(rule.get("parameters", {})),
-                    rule.get("confidence_score", 0.5),
-                    document_id
-                ))
-                new_rule_id = cur.fetchone()[0]
-                extracted_rules.append({"id": new_rule_id, "name": rule["rule_name"]})
+            if rules:
+                for rule in rules:
+                    if not rule:
+                        continue
+                    # Insert into compliance_rules table
+                    cur.execute("""
+                        INSERT INTO compliance_rules (
+                            rule_name, rule_type, description, parameters, 
+                            confidence_score, source_document, status
+                        ) 
+                        VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                        RETURNING rule_id
+                    """, (
+                        rule.get("rule_name", "Unknown Rule"),
+                        rule.get("rule_type", "custom"),
+                        rule.get("description", ""),
+                        json.dumps(rule.get("parameters", {})),
+                        rule.get("confidence_score", 0.5),
+                        document_id
+                    ))
+                    new_rule_id = cur.fetchone()[0]
+                    extracted_rules.append({"id": new_rule_id, "name": rule["rule_name"]})
                 
         conn.commit()
         return {"status": "success", "extracted_count": len(extracted_rules), "rules": extracted_rules}
@@ -114,7 +118,7 @@ async def list_rules():
     try:
         cur.execute("""
             SELECT rule_id, rule_name, rule_type, description, parameters, 
-                   confidence_score, source_text_snippet, source_document, status 
+                   confidence_score, source_document, status 
             FROM compliance_rules
             ORDER BY created_at DESC
         """)
@@ -129,9 +133,8 @@ async def list_rules():
                 "description": row[3],
                 "parameters": row[4],  # JSONB is auto-converted by psycopg2
                 "confidence_score": row[5],
-                "source_text_snippet": row[6],
-                "source_document": row[7],
-                "status": row[8]
+                "source_document": row[6],
+                "status": row[7]
             })
             
         return {"rules": rules, "count": len(rules)}

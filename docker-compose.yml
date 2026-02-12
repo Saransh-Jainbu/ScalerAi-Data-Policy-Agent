@@ -92,7 +92,7 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
-      OLLAMA_URL: http://ollama:11434
+      OLLAMA_HOST: http://ollama:11434
       CHROMA_URL: http://chromadb:8000
       PYTHONUNBUFFERED: 1
     ports:

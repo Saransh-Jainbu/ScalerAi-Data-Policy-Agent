@@ -38,7 +38,7 @@ async def list_violations(severity: Optional[str] = None, status: Optional[str] 
     cur = conn.cursor()
     try:
         query = """
-            SELECT v.violation_id, v.severity, v.status, v.evidence, v.explanation, v.created_at, r.rule_name, r.rule_type
+            SELECT v.violation_id, v.severity, v.status, v.evidence, v.explanation, v.detected_at, r.rule_name, r.rule_type
             FROM violations v
             JOIN compliance_rules r ON v.rule_id = r.rule_id
         """
@@ -56,7 +56,7 @@ async def list_violations(severity: Optional[str] = None, status: Optional[str] 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
             
-        query += " ORDER BY v.created_at DESC"
+        query += " ORDER BY v.detected_at DESC"
         
         cur.execute(query, tuple(params))
         rows = cur.fetchall()
