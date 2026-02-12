@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from processor import DocumentProcessor
 from database import Database
@@ -25,6 +26,15 @@ app = FastAPI(
     title="Document Processor Service",
     description="PDF processing and text extraction for compliance platform",
     version="1.0.0"
+)
+
+# CORS Setup
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Initialize components

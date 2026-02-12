@@ -84,37 +84,37 @@ services:
       - ./services/document-processor:/app
     restart: unless-stopped
 
-  # Rule Extraction Service (TODO: Implement)
-  # rule-extractor:
-  #   build: ./services/rule-extractor
-  #   container_name: compliance-rule-extractor
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     chromadb:
-  #       condition: service_healthy
-  #   environment:
-  #     DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
-  #     OLLAMA_URL: http://ollama:11434
-  #     CHROMA_URL: http://chromadb:8000
-  #     PYTHONUNBUFFERED: 1
-  #   volumes:
-  #     - ./services/rule-extractor:/app
-  #   restart: unless-stopped
+  # Rule Extraction Service
+  rule-extractor:
+    build: ./services/rule-extractor
+    container_name: compliance-rule-extractor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
+      OLLAMA_URL: http://ollama:11434
+      CHROMA_URL: http://chromadb:8000
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./services/rule-extractor:/app
+    restart: unless-stopped
 
-  # Violation Scanner Service (TODO: Implement)
-  # scanner:
-  #   build: ./services/scanner
-  #   container_name: compliance-scanner
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   environment:
-  #     DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
-  #     PYTHONUNBUFFERED: 1
-  #   volumes:
-  #     - ./services/scanner:/app
-  #   restart: unless-stopped
+  # Violation Scanner Service
+  scanner:
+    build: ./services/scanner
+    container_name: compliance-scanner
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./services/scanner:/app
+    restart: unless-stopped
 
   # API Service (TODO: Implement)
   # api:

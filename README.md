@@ -1,192 +1,107 @@
-# AI-Driven Data Policy Enforcement Platform
+# 🛡️ AI-Driven Data Policy Enforcement Platform
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Cost](https://img.shields.io/badge/Cost-₹0%2Fmonth-brightgreen)](docs/FREE_ALTERNATIVES.md)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue)](docker-compose.yml)
-[![Status](https://img.shields.io/badge/Status-75%25%20Complete-orange)](PROJECT_STATUS.md)
+**Automated Compliance Monitoring for Modern Data Infrastructures.**
 
-**Zero-cost, AI-powered compliance monitoring platform** that automatically extracts rules from policy documents and scans databases for violations.
+> **Status:** 🟢 **Active Beta (MVP Complete)**
+> **Tech Stack:** Python (FastAPI), React + Vite, PostgreSQL (pgvector), Redis, Ollama (Llama 3), Docker
 
 ---
 
-## 🎯 What This Does
+## 🚀 Overview
 
-- ✅ **Ingests PDF policy documents** (with OCR support)
-- ✅ **Extracts compliance rules** using AI (Llama 3.1 + spaCy)
-- ✅ **Scans databases** for violations (10M+ records)
-- ✅ **Provides explainable decisions** with source citations
-- ✅ **Monitors continuously** via Prometheus + Grafana
-- ✅ **Generates audit reports** for compliance teams
+The **Data Policy Enforcement Platform** is an enterprise-grade solution that uses AI to automatically extract compliance rules from legal documents (PDFs) and enforce them across your database infrastructure in real-time. It eliminates manual audits and reduces the risk of GDPR/CCPA violations.
 
-**Total Cost: ₹0/month** | **Saves: ₹11,48,000/year** vs paid solutions
+### Key Capabilities
+- **📄 AI Rule Extraction:** Upload PDF policies (GDPR, HIPAA) -> AI (spaCy + Llama 3) extracts actionable logic.
+- **🔍 Violation Scanner:** Automatically translates rules into SQL queries and scans your database for non-compliant records.
+- **📊 Real-time Dashboard:** A modern React UI for monitoring compliance scores, reviewing extracted rules, and managing violations.
+- **⚡ High Performance:** Async microservices architecture using FastAPI, Redis queues, and Vector Search.
 
 ---
 
-## 🚀 Quick Start (5 Minutes)
+## 🛠️ System Architecture
+
+The platform consists of four core microservices orchestrated via Docker Compose:
+
+1.  **Frontend (React + Vite):** The user interface for uploading docs and viewing dashboards.
+2.  **Document Processor:** Handles PDF ingestion, OCR, chunking, and Vector DB storage.
+3.  **Rule Extractor:** Uses LLMs (Ollama) and NLP (spaCy) to convert text into structured JSON rules.
+4.  **Violation Scanner:** The enforcement engine that generates SQL queries and detects non-compliant data.
+
+### Tech Stack
+- **Backend:** Python 3.11, FastAPI, Uvicorn
+- **Frontend:** React 18, TypeScript, Tailwind CSS, Lucide Icons, Recharts
+- **AI/ML:** Ollama (Llama 3), spaCy (en_core_web_sm), SentenceTransformers
+- **Database:** PostgreSQL 16 (Relational + JSONB), pgvector (Embeddings), Redis (Queue/Cache)
+- **Infrastructure:** Docker, Docker Compose
+
+---
+
+## ⚡ Quick Start
 
 ### Prerequisites
-- Docker Desktop (free)
-- 8GB RAM minimum (16GB recommended)
-- 20GB free disk space
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) installed and running.
+- [Node.js](https://nodejs.org/) (v18+) for frontend development.
 
-### Start the Platform
+### 1. Start the Backend Services
+Run the entire platform infrastructure with a single command:
 
-```powershell
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/compliance-platform.git
-cd compliance-platform
+```bash
+docker-compose up -d --build
+```
+*This starts Postgres, Redis, Ollama, ChromaDB, and all Python microservices.*
 
-# Start all services (11 containers)
-.\start.ps1
+### 2. Start the Frontend Dashboard
+Open a new terminal:
 
-# Download AI model (one-time, ~5 minutes)
-docker exec -it compliance-ollama ollama pull llama3.1:8b
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-### Access Points
-- **Frontend Dashboard:** http://localhost:5173
-- **API Documentation:** http://localhost:8080/docs
-- **Grafana Monitoring:** http://localhost:3000 (admin/admin)
-- **Prometheus Metrics:** http://localhost:9090
-
-**Full guide:** [QUICKSTART.md](docs/QUICKSTART.md)
-
----
-
-## 📚 Documentation
-
-- **[Quick Start Guide](docs/QUICKSTART.md)** - Get running in 5 minutes
-- **[Architecture](docs/ARCHITECTURE.md)** - Technical deep-dive
-- **[Free Alternatives](docs/FREE_ALTERNATIVES.md)** - How we achieved ₹0 cost
-- **[Project Status](PROJECT_STATUS.md)** - Current progress (75% complete)
-- **[Master Documentation](docs/MASTER_DOCUMENTATION.md)** - All research consolidated
+### 3. Access the Platform
+- **Dashboard UI:** [http://localhost:5173](http://localhost:5173) (or the port shown in terminal)
+- **API Docs (Swagger):**
+  - Document Processor: [http://localhost:8081/docs](http://localhost:8081/docs)
+  - Rule Extractor: [http://localhost:8082/docs](http://localhost:8082/docs)
+  - Scanner: [http://localhost:8083/docs](http://localhost:8083/docs)
 
 ---
 
-## 🏗️ Architecture
+## 🧪 Operational Workflow
+
+1.  **Upload Policy:** Go to the **Documents** tab and upload a PDF (e.g., "Data Retention Policy").
+2.  **AI Extraction:** The system automatically OCRs the text and extracts rules (e.g., "*User data must be deleted after 5 years*").
+3.  **Review Rules:** Go to the **Rules Engine** tab to see and approve the AI-generated logic.
+4.  **Scan for Violations:** Go to **Violations** and click **"Run Full Scan"**. The system checks your database against the new rules.
+5.  **View Report:** See a list of non-compliant records (Red Alerts) on the dashboard.
+
+---
+
+## 📂 Project Structure
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Frontend (React)                      │
-└────────────────────┬────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────┐
-│                  API Gateway (FastAPI)                   │
-└─────┬──────────────┬──────────────┬─────────────────────┘
-      │              │              │
-┌─────▼──────┐ ┌────▼──────┐ ┌────▼─────────┐
-│ Document   │ │   Rule    │ │   Violation  │
-│ Processor  │ │ Extractor │ │   Scanner    │
-└─────┬──────┘ └────┬──────┘ └────┬─────────┘
-      │              │              │
-┌─────▼──────────────▼──────────────▼─────────┐
-│  PostgreSQL + Redis + Ollama + ChromaDB     │
-└─────────────────────────────────────────────┘
+compliance-platform/
+├── services/               # Microservices Source Code
+│   ├── document-processor/ # PDF ingestion & OCR
+│   ├── rule-extractor/     # AI Logic (spaCy + Ollama)
+│   └── scanner/            # SQL Generation & Enforcement
+├── frontend/               # React Dashboard Application
+├── database/               # SQL Init Scripts & Migrations
+├── docs/                   # Detailed Documentation
+└── docker-compose.yml      # Container Orchestration
 ```
-
-**11 Services:** PostgreSQL, Redis, Ollama, ChromaDB, 4 microservices, Prometheus, Grafana, Frontend
-
----
-
-## 💰 Zero-Cost Stack
-
-| Component | Enterprise Option | Our Choice | Savings/Year |
-|-----------|-------------------|------------|--------------|
-| LLM | OpenAI GPT-4 | Ollama (Llama 3.1) | ₹6,00,000 |
-| Vector DB | Pinecone | ChromaDB | ₹84,000 |
-| Hosting | GKE | Docker Compose | ₹2,40,000 |
-| Database | Cloud SQL | PostgreSQL | ₹60,000 |
-| Queue | Confluent Kafka | Redis Streams | ₹60,000 |
-| Monitoring | Datadog | Prometheus + Grafana | ₹1,20,000 |
-| BI Tool | Tableau | Apache Superset | ₹84,000 |
-| **TOTAL** | | | **₹11,48,000** |
-
-**Every component is 100% free and open-source.** No trials, no limits.
-
----
-
-## 🔧 Technology Stack
-
-**Backend:** Python, FastAPI, PostgreSQL, Redis  
-**AI/ML:** Ollama (Llama 3.1), spaCy, ChromaDB, Hugging Face  
-**Document Processing:** PyMuPDF, Tesseract OCR  
-**Infrastructure:** Docker, Kubernetes, Apache Airflow  
-**Monitoring:** Prometheus, Grafana, Elasticsearch  
-**Frontend:** React, Vite, Chart.js
-
-**All free and open-source!**
-
----
-
-## 📊 Current Status
-
-**Progress: 75% Complete**
-
-✅ **Complete:**
-- Infrastructure (11 services)
-- Database schema (6 tables)
-- Document Processor service
-- Comprehensive documentation
-
-
-
-**See:** [PROJECT_STATUS.md](PROJECT_STATUS.md)
-
----
-
-## 🎯 Use Cases
-
-- **Healthcare:** HIPAA compliance monitoring
-- **Finance:** SOX, PCI DSS enforcement
-- **HR:** Employee policy compliance
-- **Legal:** GDPR, data privacy audits
-- **Government:** Regulatory compliance
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! This is a reference implementation for:
-- Hackathons and competitions
-- Learning AI/compliance systems
-- Building production compliance platforms
-
-**See:** [CONTRIBUTING.md](CONTRIBUTING.md) (coming soon)
-
----
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and setup your development environment.
 
 ## 📄 License
 
-MIT License - 100% free for commercial and non-commercial use.
-
-**See:** [LICENSE](LICENSE)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-## 🏆 Why This Project?
-
-**Built for a hackathon/competition with these goals:**
-1. ✅ Solve real compliance problems
-2. ✅ Use only free, open-source tools
-3. ✅ Create production-ready architecture
-4. ✅ Demonstrate AI/NLP capabilities
-5. ✅ Save enterprises millions in compliance costs
-
-**Result:** Enterprise-grade platform at ₹0/month cost.
-
----
-
-## 📞 Support
-
-- **Documentation:** [docs/](docs/)
-
-
----
-
-## 🌟 Star This Project!
-
-If you find this useful, please ⭐ star this repository!
-
----
-
-**Built with ❤️**
+**Built with ❤️ by ScalerAi Team**
