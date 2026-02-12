@@ -59,11 +59,6 @@ services:
     environment:
       IS_PERSISTENT: "TRUE"
       ANONYMIZED_TELEMETRY: "FALSE"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
 
   # Document Processing Service
@@ -79,6 +74,8 @@ services:
       DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
       REDIS_URL: redis://redis:6379
       PYTHONUNBUFFERED: 1
+    ports:
+      - "8081:8081"
     volumes:
       - ./data/documents:/app/documents
       - ./services/document-processor:/app
@@ -92,12 +89,14 @@ services:
       postgres:
         condition: service_healthy
       chromadb:
-        condition: service_healthy
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
       OLLAMA_URL: http://ollama:11434
       CHROMA_URL: http://chromadb:8000
       PYTHONUNBUFFERED: 1
+    ports:
+      - "8082:8082"
     volumes:
       - ./services/rule-extractor:/app
     restart: unless-stopped
@@ -112,6 +111,8 @@ services:
     environment:
       DATABASE_URL: postgresql://admin:admin123@postgres:5432/compliance
       PYTHONUNBUFFERED: 1
+    ports:
+      - "8083:8083"
     volumes:
       - ./services/scanner:/app
     restart: unless-stopped
